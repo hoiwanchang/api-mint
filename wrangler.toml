@@ -1,0 +1,22 @@
+name = "api-mint"
+main = "src/index.js"
+compatibility_date = "2025-08-01"
+
+[vars]
+UPTIME = "2026-08-30"
+
+# --- bindings (declared; values supplied via .dev.vars / dashboard) ---
+[[kv_namespaces]]
+binding = "RATE"
+id = "REPLACE_WITH_RATE_KV_ID"
+
+# Cron: daily self-check at 09:00 UTC (01:00 Beijing... actually 17:00 CST). Keep.
+[triggers]
+crons = ["0 9 * * *"]
+
+# [observability]
+# logs = { enabled = true }
+
+# NOTE: Cache API is available to Workers without extra config on all plans.
+# API_KEYS (comma-separated paid keys) set as a secret/env var in the dashboard
+# or via `wrangler secret put API_KEYS`.

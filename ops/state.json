@@ -1,0 +1,29 @@
+{
+  "project": "api-mint",
+  "created": "2026-08-30T23:30:00+08:00",
+  "status": "local_verified_pending_cf_account",
+  "local_verified": {
+    "endpoints_ok": ["/", "/health", "/v1/today", "/v1/url/extract", "/pricing"],
+    "endpoints_blocked_upstream_locally": ["/v1/fx", "/v1/crypto"],
+    "rate_limit_ok": true,
+    "ssrf_guard_ok": true
+  },
+  "cloudflare": {
+    "account": null,
+    "worker_url": null,
+    "kv_rate_namespace": null,
+    "custom_domain": null
+  },
+  "payments": {
+    "buymeacoffee_page": null,
+    "buymeacoffee_api_token": null,
+    "stripe": null
+  },
+  "revenue": {
+    "total_usd": 0,
+    "events": []
+  },
+  "ops_log": [
+    { "ts": "2026-08-30", "note": "scaffold + local verify done; awaiting CF account + BMC token from Kane" }
+  ]
+}
