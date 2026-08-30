@@ -8,8 +8,8 @@
  *   GET  /v1/url/extract?url=...            -> page title/description/og-image
  *   GET  /v1/crypto?symbol=BTC              -> crypto prices (coingecko, 5-min cache)
  *   GET  /v1/stats            -> public usage stats (for /v1/today etc.)
- * Paid tiers (future, Stripe via webhook): API keys + higher limits.
- * Revenue model: free tier drives discoverability; paid API keys via Stripe Checkout.
+ * Permanently free — part of the aipps cluster (api-mint + qr-mint).
+ * Cluster monetization: Lemon Squeezy digital products (boilerplate/templates).
  */
 
 const ER_API = "https://open.er-api.com/v6/latest/USD";
@@ -21,8 +21,6 @@ const CACHE_KEY_CG = "cg_v1";
 const RATE_LIMITS = {
   // keyless public: per minute per IP
   anon_per_min: 30,
-  // paid (X-API-Key): per hour
-  paid_per_hour: 1000,
 };
 
 const CACHED_TTL_SEC = {
@@ -43,17 +41,9 @@ export default {
       });
     }
 
-    // --- API key handling ---
-    const apiKey = request.headers.get("X-API-Key");
-    const isPaid = !!apiKey && env.API_KEYS && env.API_KEYS.includes(apiKey);
-
     // --- rate limit (KV) ---
     const ip = request.headers.get("cf-connecting-ip") || "anon";
-    const rlKey = isPaid ? `rl:paid:${apiKey}` : `rl:${ip}`;
-    const limit = isPaid
-      ? { limit: RATE_LIMITS.paid_per_hour, windowSec: 3600 }
-      : { limit: RATE_LIMITS.anon_per_min, windowSec: 60 };
-    const rl = await rateLimit(env.RATE, rlKey, limit.limit, limit.windowSec, ctx);
+    const rl = await rateLimit(env.RATE, `rl:${ip}`, RATE_LIMITS.anon_per_min, 60, ctx);
     if (!rl.ok) {
       return json({
         error: "rate_limited",
@@ -90,7 +80,7 @@ export default {
             "GET /v1/crypto?symbol=BTC",
             "GET /v1/url/extract?url=https://example.com",
           ],
-          pricing: { free: "30 req/min per IP, no key needed", paid: "API key, 1000 req/hour — via Stripe (see /pricing)" },
+          pricing: "free forever — 30 req/min per IP, no key needed",
           uptime: env.UPTIME || "booting",
           powered_by: "Kane's self-sustaining AI agent",
         };
@@ -118,18 +108,6 @@ export default {
           `User-agent: *\nAllow: /\nDisallow: /v1/\nSitemap: https://api-mint.hoiwan.workers.dev/sitemap.xml\n`,
           { headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "public, max-age=86400" } }
         );
-      } else if (path === "/pricing") {
-        body = {
-          plans: [
-            { name: "free", price: 0, requests: "30/min per IP", key: "not needed" },
-            { name: "pro", price: "USD 5/month (Stripe)", requests: "1000/hour per key", key: "X-API-Key" },
-          ],
-          note: "Stripe checkout link will appear here once configured.",
-        };
-      } else if (path === "/pricing/checkout") {
-        // Future: redirect to Stripe Checkout. Placeholder for now.
-        status = 402;
-        body = { error: "not_configured", message: "Stripe checkout not wired yet. Email Kane or use the free tier." };
       } else {
         status = 404;
         body = { error: "not_found", message: "Unknown endpoint. See / for the list." };
@@ -226,12 +204,8 @@ curl "https://api-mint.hoiwan.workers.dev/v1/fx?from=USD&to=CNY&amount=100"
 curl "https://api-mint.hoiwan.workers.dev/v1/crypto?symbol=BTC"
 curl "https://api-mint.hoiwan.workers.dev/v1/url/extract?url=https://example.com"</code></pre>
 
-<h2>Limits &amp; pricing</h2>
-<table>
-<tr><th>Plan</th><th>Limits</th></tr>
-<tr><td>Free</td><td>30 requests/minute per IP — no key, no signup</td></tr>
-<tr><td>Pro</td><td>1,000 requests/hour per API key (coming soon, via Stripe)</td></tr>
-</table>
+<h2>Limits</h2>
+<p style="color:var(--dim);font-size:14px">30 requests/minute per IP — no key, no signup, free forever.</p>
 
 <h2>Why it exists</h2>
 <p style="color:var(--dim);font-size:14px;margin-bottom:12px">

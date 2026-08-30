@@ -1,8 +1,9 @@
 # api-mint
 
 Self-hosted free utility API on Cloudflare Workers (free tier).
-Built + operated by Kane's Hermes agent. Goal: earn revenue (Stripe / future),
-revenue goes to Kane's Buy Me a Coffee.
+Built + operated by Kane's Hermes agent. Part of the aipps cluster
+($0 Cloudflare Workers infra; cluster monetization via Lemon Squeezy digital products).
+
 
 ## Endpoints (GET, JSON)
 
@@ -14,12 +15,12 @@ revenue goes to Kane's Buy Me a Coffee.
 | `/v1/fx?from=USD&to=CNY&amount=100` | Forex conversion, 1-day cache | open.er-api.com |
 | `/v1/crypto?symbol=BTC` | Crypto price + 24h change, 5-min cache | coingecko |
 | `/v1/url/extract?url=...` | Title/description/og-image of any public URL, SSRF-guarded | direct fetch, 8s timeout |
-| `/pricing` | Plan info | — |
+
 
 ## Architecture
 
 - Single Worker (ES module), no framework
-- `env.RATE` (KV): per-IP / per-key rate limiting (30/min anon, 1000/hour with `X-API-Key` in `API_KEYS` secret)
+- `env.RATE` (KV): per-IP rate limiting (30 req/min)
 - `caches.default` (Cache API): upstream response caching — keys must be valid URL strings
 - Cron trigger 09:00 UTC daily: self-check (placeholder; expand to health check + stats ping)
 - Upstream fetches wrapped with AbortController timeout (10s default)
@@ -44,15 +45,13 @@ Pitfalls found (2026-08-30):
 npx wrangler login
 npx wrangler kv namespace create RATE   # -> put id in wrangler.toml
 npx wrangler deploy
-npx wrangler secret put API_KEYS   # optional, comma-separated paid keys
 ```
 
 ## Revenue
 
-Free tier (no key) for discoverability. Paid `X-API-Key` tier via Stripe Checkout
-(wire `/pricing/checkout` once Stripe account exists).
-Target: Buy Me a Coffee (Kane's page), webhook-driven reconciliation via
-studio.buymeacoffee.com webhook + developer token (read-only API).
+Permanently free (30 req/min per IP, no key). No paid API tier by design —
+revenue comes from cluster digital products (Lemon Squeezy), not subscriptions.
+Cluster status & roadmaps: /home/kane/projects/aipps-cluster (README + CLUSTER-ROADMAP).
 
 ## Ops (cron-driven)
 
