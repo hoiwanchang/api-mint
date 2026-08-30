@@ -59,6 +59,19 @@ export default {
     let body;
     try {
       if (path === "/") {
+        const accept = request.headers.get("accept") || "";
+        const wantsJson = accept.includes("application/json") && !accept.includes("text/html");
+        if (!wantsJson) {
+          // SEO landing page for humans / crawlers / curl
+          return new Response(landingHtml(env), {
+            status: 200,
+            headers: {
+              "content-type": "text/html; charset=utf-8",
+              "cache-control": "public, max-age=3600",
+              "x-powered-by": "api-mint",
+            },
+          });
+        }
         body = {
           service: "api-mint",
           status: "operational",
@@ -86,6 +99,17 @@ export default {
       } else if (path === "/v1/url/extract") {
         const r = await handleExtract(url, env);
         body = r.body; status = r.status;
+      } else if (path === "/sitemap.xml") {
+        const base = "https://api-mint.hoiwan.workers.dev";
+        return new Response(
+          `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n<url><loc>${base}/</loc><changefreq>daily</changefreq></url>\n</urlset>`,
+          { headers: { "content-type": "application/xml; charset=utf-8", "cache-control": "public, max-age=86400" } }
+        );
+      } else if (path === "/robots.txt") {
+        return new Response(
+          `User-agent: *\nAllow: /\nDisallow: /v1/\nSitemap: https://api-mint.hoiwan.workers.dev/sitemap.xml\n`,
+          { headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "public, max-age=86400" } }
+        );
       } else if (path === "/pricing") {
         body = {
           plans: [
@@ -120,6 +144,89 @@ function json(body, status = 200) {
       "x-powered-by": "api-mint",
     },
   });
+}
+
+function landingHtml(env) {
+  const uptime = env.UPTIME || "online";
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>api-mint — Free utility APIs: timezone, forex, crypto, page metadata</title>
+<meta name="description" content="api-mint: free public utility APIs. Current time in any timezone, live forex rates, crypto prices, and page metadata extraction. No API key, 30 requests/min per IP.">
+<meta name="keywords" content="free api, timezone api, forex api, crypto price api, currency converter, page metadata, rss, no api key">
+<meta property="og:title" content="api-mint — free utility APIs, no key needed">
+<meta property="og:description" content="Timezone, forex, crypto prices, page metadata. 30 req/min free, per IP, no API key.">
+<meta property="og:type" content="website">
+<link rel="canonical" href="https://api-mint.hoiwan.workers.dev/">
+<style>
+:root{--bg:#0d0f12;--panel:#15181d;--line:#2a2f37;--text:#e8eaed;--dim:#9aa0a6;--amber:#ffb81c;--ok:#3dd68c}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font:16px/1.6 ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+background-image:radial-gradient(circle,#1a1e24 1px,transparent 1px);background-size:24px 24px}
+.wrap{max-width:860px;margin:0 auto;padding:48px 24px}
+header{border:1px solid var(--line);background:var(--panel);padding:24px;margin-bottom:32px}
+h1{font-size:28px;letter-spacing:-.5px}
+h1 span{color:var(--amber)}
+.tag{color:var(--dim);margin-top:8px;font-size:14px}
+.status{display:inline-block;margin-top:14px;padding:4px 10px;border:1px solid var(--ok);color:var(--ok);font-size:13px}
+h2{font-size:18px;color:var(--amber);margin:32px 0 12px;text-transform:uppercase;letter-spacing:1px}
+table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line)}
+th,td{padding:12px 14px;text-align:left;border-bottom:1px solid var(--line);font-size:14px;vertical-align:top}
+th{color:var(--dim);font-weight:normal;text-transform:uppercase;font-size:12px;letter-spacing:1px}
+code{color:var(--amber);background:#0a0c0e;padding:2px 6px;font-size:13px;word-break:break-all}
+td:first-child{white-space:nowrap;color:var(--dim);width:110px}
+pre{background:#0a0c0e;border:1px solid var(--line);padding:16px;overflow-x:auto;font-size:13px;color:var(--text)}
+pre code{background:none;padding:0;color:var(--text)}
+.foot{margin-top:40px;color:var(--dim);font-size:13px;border-top:1px solid var(--line);padding-top:16px}
+a{color:var(--amber);text-decoration:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+<h1>api<span>-</span>mint</h1>
+<div class="tag">Free public utility APIs — no API key, 30 requests/min per IP</div>
+<div class="status">● operational since ${uptime}</div>
+</header>
+
+<h2>Endpoints</h2>
+<table>
+<tr><th>Endpoint</th><th>Description</th></tr>
+<tr><td><code>GET /v1/today</code></td><td>Current date, time &amp; weekday in any IANA timezone. Param: <code>tz</code> (default UTC)</td></tr>
+<tr><td><code>GET /v1/fx</code></td><td>Live USD forex rates with conversion. Params: <code>from</code>, <code>to</code>, <code>amount</code></td></tr>
+<tr><td><code>GET /v1/crypto</code></td><td>Crypto prices (BTC, ETH, BNB, SOL) in USD with 24h change. Param: <code>symbol</code></td></tr>
+<tr><td><code>GET /v1/url/extract</code></td><td>Page title, description, og-image, final URL. Param: <code>url</code></td></tr>
+<tr><td><code>GET /health</code></td><td>Liveness probe — <code>{"ok":true}</code></td></tr>
+<tr><td><code>GET /</code></td><td>This page (HTML) or machine-readable service info (Accept: application/json)</td></tr>
+</table>
+
+<h2>Quick start</h2>
+<pre><code>curl "https://api-mint.hoiwan.workers.dev/v1/today?tz=Asia/Shanghai"
+curl "https://api-mint.hoiwan.workers.dev/v1/fx?from=USD&to=CNY&amount=100"
+curl "https://api-mint.hoiwan.workers.dev/v1/crypto?symbol=BTC"
+curl "https://api-mint.hoiwan.workers.dev/v1/url/extract?url=https://example.com"</code></pre>
+
+<h2>Limits &amp; pricing</h2>
+<table>
+<tr><th>Plan</th><th>Limits</th></tr>
+<tr><td>Free</td><td>30 requests/minute per IP — no key, no signup</td></tr>
+<tr><td>Pro</td><td>1,000 requests/hour per API key (coming soon, via Stripe)</td></tr>
+</table>
+
+<h2>Why it exists</h2>
+<p style="color:var(--dim);font-size:14px;margin-bottom:12px">
+api-mint is built and operated end-to-end by an AI agent on Cloudflare Workers (free tier) —
+deploy, monitoring, and daily ops run unattended. If it saves you a dependency, that's the point.
+</p>
+
+<div class="foot">
+api-mint · hosted on Cloudflare Workers · uptime since ${uptime}
+</div>
+</div>
+</body>
+</html>`;
 }
 
 function getToday(url) {
