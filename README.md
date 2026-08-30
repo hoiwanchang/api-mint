@@ -1,98 +1,61 @@
 # api-mint
 
-**Free public utility APIs — no API key, no signup.**
+Self-hosted free utility API on Cloudflare Workers (free tier).
+Built + operated by Kane's Hermes agent. Goal: earn revenue (Stripe / future),
+revenue goes to Kane's Buy Me a Coffee.
 
-api-mint is a set of small, useful JSON endpoints running on Cloudflare Workers
-(free tier). Built and operated end-to-end by an AI agent (deploy, monitoring,
-daily ops all unattended).
+## Endpoints (GET, JSON)
 
-## Endpoints
-
-Base URL: `https://api-mint.hoiwan.workers.dev`
-
-| Endpoint | Description | Params |
+| Endpoint | Description | Upstream |
 |---|---|---|
-| `GET /v1/today` | Current date, time, weekday in any IANA timezone | `tz` (default `UTC`) |
-| `GET /v1/fx` | Live USD forex rates + conversion (open.er-api.com, 1-day cache) | `from`, `to`, `amount` |
-| `GET /v1/crypto` | BTC / ETH / BNB / SOL prices in USD + 24h change (CoinGecko, 5-min cache) | `symbol` |
-| `GET /v1/url/extract` | Page title, meta description, og-image, final URL after redirects | `url` |
-| `GET /health` | Liveness probe | — |
-| `GET /` | This landing page (HTML) or service info (`Accept: application/json`) | — |
+| `/` | Service status + endpoint list (SEO landing) | — |
+| `/health` | Liveness probe | — |
+| `/v1/today?tz=Asia/Shanghai` | Date/time/weekday in IANA timezone | none (Intl) |
+| `/v1/fx?from=USD&to=CNY&amount=100` | Forex conversion, 1-day cache | open.er-api.com |
+| `/v1/crypto?symbol=BTC` | Crypto price + 24h change, 5-min cache | coingecko |
+| `/v1/url/extract?url=...` | Title/description/og-image of any public URL, SSRF-guarded | direct fetch, 8s timeout |
+| `/pricing` | Plan info | — |
 
-## Quick start
+## Architecture
+
+- Single Worker (ES module), no framework
+- `env.RATE` (KV): per-IP / per-key rate limiting (30/min anon, 1000/hour with `X-API-Key` in `API_KEYS` secret)
+- `caches.default` (Cache API): upstream response caching — keys must be valid URL strings
+- Cron trigger 09:00 UTC daily: self-check (placeholder; expand to health check + stats ping)
+- Upstream fetches wrapped with AbortController timeout (10s default)
+
+## Local dev
 
 ```bash
-curl "https://api-mint.hoiwan.workers.dev/v1/today?tz=Asia/Shanghai"
-curl "https://api-mint.hoiwan.workers.dev/v1/fx?from=USD&to=CNY&amount=100"
-curl "https://api-mint.hoiwan.workers.dev/v1/crypto?symbol=BTC"
-curl "https://api-mint.hoiwan.workers.dev/v1/url/extract?url=https://example.com"
+npx wrangler dev --port 8787 --local
+curl localhost:8787/v1/today?tz=Asia/Shanghai
 ```
 
-### Responses
+Pitfalls found (2026-08-30):
+- workerd local (alpha builds): `kv.get(key, "number")` throws "Unknown response type"
+  when the key exists — always `get(key)` + parseInt instead.
+- Cache API keys must be valid URL strings, bare strings throw "Invalid URL".
+- open.er-api.com / api.coingecko.com are blocked from SUSTech campus network
+  (local 502 is expected; production CF edges can reach them).
 
-`/v1/today?tz=Asia/Shanghai`:
-```json
-{
-  "timezone": "Asia/Shanghai",
-  "iso": "2026-08-30T16:00:00.000Z",
-  "date": "2026-08-30",
-  "time": "00:00:00",
-  "weekday": "Monday",
-  "utc_offset": "GMT+8"
-}
-```
-
-`/v1/fx?from=USD&to=CNY&amount=100`:
-```json
-{
-  "from": "USD", "to": "CNY", "amount": 100,
-  "rate": 7.15, "result": 715.0, "base": "USD"
-}
-```
-
-## Limits
-
-- **Free tier:** 30 requests/min per IP. No key needed.
-- **Pro tier:** 1,000 req/hour per API key via `X-API-Key` header (coming soon).
-
-429 responses include a `retry_after_sec` field.
-
-## Error shape
-
-```json
-{ "error": "rate_limited", "message": "Free tier limit reached (30 req/min).", "retry_after_sec": 23 }
-```
-
-## Notes
-
-- All responses are JSON, UTF-8, with `x-powered-by: api-mint` header.
-- `fx` data cached 24h (daily reference rates), `crypto` cached 5 min.
-- `/v1/url/extract` blocks private/internal IPs (SSRF guard) and caps responses at 2 MB.
-- Source of this worker is in this repo — fork it, self-host it anywhere Workers runs.
-
----
-
-## 中文说明
-
-一组**免 API key、免注册**的公共实用 JSON API，部署在 Cloudflare Workers 免费层，
-由 AI agent 全自动构建与运营（部署、监控、每日巡检均无人值守）。
-
-| 端点 | 说明 | 参数 |
-|---|---|---|
-| `GET /v1/today` | 任意 IANA 时区的当前日期/时间/星期 | `tz`（默认 UTC） |
-| `GET /v1/fx` | 实时美元汇率 + 换算（缓存 24h） | `from`、`to`、`amount` |
-| `GET /v1/crypto` | BTC/ETH/BNB/SOL 美元价 + 24h 涨跌（缓存 5 分钟） | `symbol` |
-| `GET /v1/url/extract` | 网页标题、meta 描述、og-image、重定向后的最终 URL | `url` |
-
-免费额度：每 IP 30 次/分钟；被限流返回 429 并带 `retry_after_sec`。
-
-Worker 源码即本仓库，fork 后可自行部署。
-
-## Self-host
+## Deploy (needs Cloudflare account)
 
 ```bash
 npx wrangler login
-npx wrangler kv namespace create RATE
-# set the kv id in wrangler.toml
+npx wrangler kv namespace create RATE   # -> put id in wrangler.toml
 npx wrangler deploy
+npx wrangler secret put API_KEYS   # optional, comma-separated paid keys
 ```
+
+## Revenue
+
+Free tier (no key) for discoverability. Paid `X-API-Key` tier via Stripe Checkout
+(wire `/pricing/checkout` once Stripe account exists).
+Target: Buy Me a Coffee (Kane's page), webhook-driven reconciliation via
+studio.buymeacoffee.com webhook + developer token (read-only API).
+
+## Ops (cron-driven)
+
+- Daily: verify /health on live URL, check CF usage (dashboard or API), log to ops/state.json
+- Weekly: check upstreams, consider adding endpoints based on what's free on CF
+- All state in ops/state.json (request counts, revenue events, incidents)

@@ -1,32 +1,50 @@
 {
   "project": "api-mint",
   "created": "2026-08-30T23:30:00+08:00",
-  "status": "worker_deployed_domain_bind_pending",
+  "status": "live_promoting",
+  "live_url": "https://api-mint.hoiwan.workers.dev",
+  "custom_domain": {
+    "pending": true,
+    "note": "api.aipps.vip 绑定需 Kane 在 dashboard 手动加 route（token 缺 zone 级 Workers Routes:Edit），见 ops/setup-blocked.md"
+  },
+  "ops_actions": {
+    "2026-08-30": [
+      "SEO HTML 落地页上线：/ 默认返回 HTML，Accept: application/json 返回 JSON",
+      "sitemap.xml 和 robots.txt 上线",
+      "CORS 全开（access-control-allow-origin: *），浏览器前端可直接调用，线上验证通过",
+      "GitHub 公开仓库 hoiwanchang/api-mint 推送（双语 README + 源码 + self-host 指南）",
+      "public-apis/public-apis PR #7151 提交（50k+ star 免费 API 目录，Currency Exchange 分类，mergeable=true 待审）"
+    ]
+  },
+  "pr_watch": [
+    {
+      "repo": "public-apis/public-apis",
+      "pr": 7151,
+      "status": "open",
+      "note": "被 merge 后记入本文件并告知用户"
+    }
+  ],
   "local_verified": {
-    "endpoints_ok": ["/", "/health", "/v1/today", "/v1/url/extract", "/pricing"],
+    "endpoints_ok": [
+      "/",
+      "/health",
+      "/v1/today",
+      "/v1/url/extract"
+    ],
+    "blocked_local_only": [
+      "/v1/fx",
+      "/v1/crypto"
+    ],
+    "block_reason": "校园网访问 er-api/coingecko 超时，CF 边缘生产可达",
     "rate_limit_ok": true,
     "ssrf_guard_ok": true,
-    "cache_ok": true
+    "cache_ok": true,
+    "cors_ok": true
   },
-  "cloudflare": {
-    "account_id": "4bdb8470582c9dc7053e529fb4991e83",
-    "zone_aipps_vip": "f1f9b7175d84e9fb91e210ae084774d4",
-    "worker_name": "api-mint",
-    "worker_subdomain": "https://api-mint.hoiwan.workers.dev",
-    "custom_domain": "api.aipps.vip",
-    "route_bound": false,
-    "kv_rate_namespace": "3f27155886dc4672ba2baf42657529ff",
-    "token_scope": "account-level Edit Cloudflare Workers (NO zone Workers Routes: Edit)",
-    "deployed_versions": ["0e69effd", "4df213fc"]
-  },
-  "payments": {
-    "model": "none_for_now",
-    "note": "Kane 无 BMC/Stripe，Lemon Squeezy 以后再说。当前纯免费 API。",
-    "lemonsqueezy": null
-  },
-  "revenue": { "total_usd": 0, "events": [] },
-  "ops_log": [
-    { "ts": "2026-08-30", "note": "scaffold + local verify done" },
-    { "ts": "2026-08-30", "note": "worker deployed to CF (hoiwan acct), workers.dev live; custom domain api.aipps.vip NOT bound yet - token lacks zone Workers Routes: Edit perm. Awaiting Kane: new zone-scoped token OR manual dashboard route." }
-  ]
+  "known_issues": [
+    "workerd 1.20260828.0-alpha 本地 KV get(number) 崩溃 bug，已 pin workerd@1.20260827.1 规避",
+    "Cache API 键必须为合法 URL 字符串",
+    "CF 在 /robots.txt 平台层注入 AI content-signals 头（正常行为）"
+  ],
+  "notes": "运营推广：SEO 落地页 + GitHub 仓库 + public-apis PR 已上线。收款未接（Lemon Squeezy 待 Kane 注册）。定时任务 7b6bdd7d9743 每日 09:00 UTC 巡检+盯 PR。"
 }

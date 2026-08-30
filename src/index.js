@@ -241,6 +241,7 @@ deploy, monitoring, and daily ops run unattended. If it saves you a dependency, 
 
 <div class="foot">
 api-mint · hosted on Cloudflare Workers · uptime since ${uptime}
+&nbsp;|&nbsp; <a href="https://qr-mint.hoiwan.workers.dev" target="_blank" rel="noopener">qr-mint — free QR codes, no login</a>
 </div>
 </div>
 </body>
