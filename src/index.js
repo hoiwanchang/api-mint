@@ -35,6 +35,14 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, "") || "/";
 
+    // --- CORS: allow browser frontends to call /v1/* directly ---
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        status: 204,
+        headers: corsHeaders(),
+      });
+    }
+
     // --- API key handling ---
     const apiKey = request.headers.get("X-API-Key");
     const isPaid = !!apiKey && env.API_KEYS && env.API_KEYS.includes(apiKey);
@@ -135,6 +143,15 @@ export default {
   },
 };
 
+function corsHeaders() {
+  return {
+    "access-control-allow-origin": "*",
+    "access-control-allow-methods": "GET, OPTIONS",
+    "access-control-allow-headers": "Content-Type, X-API-Key",
+    "access-control-max-age": "86400",
+  };
+}
+
 function json(body, status = 200) {
   return new Response(JSON.stringify(body, null, 2), {
     status,
@@ -142,6 +159,7 @@ function json(body, status = 200) {
       "content-type": "application/json; charset=utf-8",
       "cache-control": "no-store",
       "x-powered-by": "api-mint",
+      ...corsHeaders(),
     },
   });
 }
