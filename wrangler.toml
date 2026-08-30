@@ -14,6 +14,11 @@ id = "REPLACE_WITH_RATE_KV_ID"
 [triggers]
 crons = ["0 9 * * *"]
 
+# 自定义子域名 route：api.aipps.vip/*（aipps.vip zone 已托管在 CF）
+routes = [
+  { pattern = "api.aipps.vip/*", zone_name = "aipps.vip" }
+]
+
 # [observability]
 # logs = { enabled = true }
 
