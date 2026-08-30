@@ -8,16 +8,16 @@ UPTIME = "2026-08-30"
 # --- bindings (declared; values supplied via .dev.vars / dashboard) ---
 [[kv_namespaces]]
 binding = "RATE"
-id = "REPLACE_WITH_RATE_KV_ID"
-
-# Cron: daily self-check at 09:00 UTC (01:00 Beijing... actually 17:00 CST). Keep.
-[triggers]
-crons = ["0 9 * * *"]
+id = "3f27155886dc4672ba2baf42657529ff"
 
 # 自定义子域名 route：api.aipps.vip/*（aipps.vip zone 已托管在 CF）
 routes = [
   { pattern = "api.aipps.vip/*", zone_name = "aipps.vip" }
 ]
+
+# Cron: daily self-check at 09:00 UTC (17:00 CST).
+[triggers]
+crons = ["0 9 * * *"]
 
 # [observability]
 # logs = { enabled = true }

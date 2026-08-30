@@ -1,29 +1,32 @@
 {
   "project": "api-mint",
   "created": "2026-08-30T23:30:00+08:00",
-  "status": "local_verified_pending_cf_account",
+  "status": "worker_deployed_domain_bind_pending",
   "local_verified": {
     "endpoints_ok": ["/", "/health", "/v1/today", "/v1/url/extract", "/pricing"],
-    "endpoints_blocked_upstream_locally": ["/v1/fx", "/v1/crypto"],
     "rate_limit_ok": true,
-    "ssrf_guard_ok": true
+    "ssrf_guard_ok": true,
+    "cache_ok": true
   },
   "cloudflare": {
-    "account": null,
-    "worker_url": null,
-    "kv_rate_namespace": null,
-    "custom_domain": null
+    "account_id": "4bdb8470582c9dc7053e529fb4991e83",
+    "zone_aipps_vip": "f1f9b7175d84e9fb91e210ae084774d4",
+    "worker_name": "api-mint",
+    "worker_subdomain": "https://api-mint.hoiwan.workers.dev",
+    "custom_domain": "api.aipps.vip",
+    "route_bound": false,
+    "kv_rate_namespace": "3f27155886dc4672ba2baf42657529ff",
+    "token_scope": "account-level Edit Cloudflare Workers (NO zone Workers Routes: Edit)",
+    "deployed_versions": ["0e69effd", "4df213fc"]
   },
   "payments": {
-    "buymeacoffee_page": null,
-    "buymeacoffee_api_token": null,
-    "stripe": null
+    "model": "none_for_now",
+    "note": "Kane 无 BMC/Stripe，Lemon Squeezy 以后再说。当前纯免费 API。",
+    "lemonsqueezy": null
   },
-  "revenue": {
-    "total_usd": 0,
-    "events": []
-  },
+  "revenue": { "total_usd": 0, "events": [] },
   "ops_log": [
-    { "ts": "2026-08-30", "note": "scaffold + local verify done; awaiting CF account + BMC token from Kane" }
+    { "ts": "2026-08-30", "note": "scaffold + local verify done" },
+    { "ts": "2026-08-30", "note": "worker deployed to CF (hoiwan acct), workers.dev live; custom domain api.aipps.vip NOT bound yet - token lacks zone Workers Routes: Edit perm. Awaiting Kane: new zone-scoped token OR manual dashboard route." }
   ]
 }
