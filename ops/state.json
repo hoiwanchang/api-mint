@@ -4,8 +4,13 @@
   "status": "live_promoting",
   "live_url": "https://api-mint.hoiwan.workers.dev",
   "custom_domain": {
-    "pending": true,
-    "note": "api.aipps.vip 绑定需 Kane 在 dashboard 手动加 route（token 缺 zone 级 Workers Routes:Edit），见 ops/setup-blocked.md"
+    "status": "live",
+    "bound": [
+      "api.aipps.vip/*",
+      "qr.aipps.vip/*"
+    ],
+    "verified": "2026-08-31 via proxy: health 200, landing 200 on api.aipps.vip; qr.aipps.vip/health 200",
+    "note": "bound by Kane in dashboard (token lacks zone-level Routes/DNS edit)"
   },
   "ops_actions": {
     "2026-08-30": [
@@ -46,5 +51,10 @@
     "Cache API 键必须为合法 URL 字符串",
     "CF 在 /robots.txt 平台层注入 AI content-signals 头（正常行为）"
   ],
-  "notes": "运营推广：SEO 落地页 + GitHub 仓库 + public-apis PR 已上线。收款未接（Lemon Squeezy 待 Kane 注册）。定时任务 7b6bdd7d9743 每日 09:00 UTC 巡检+盯 PR。"
+  "notes": "运营推广：SEO 落地页 + GitHub 仓库 + public-apis PR 已上线。收款未接（Lemon Squeezy 待 Kane 注册）。定时任务 7b6bdd7d9743 每日 09:00 UTC 巡检+盯 PR。",
+  "lemon_squeezy": {
+    "registered": true,
+    "credentials_pending": true,
+    "need": "merchant ID + API token (Dashboard -> Developers -> API keys) for daily sales reconciliation"
+  }
 }
