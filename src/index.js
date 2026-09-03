@@ -198,9 +198,37 @@ export default {
       });
     }
 
-    // --- DoH subpath: /my-realname-solver (own rate limit, skips KV API limit) ---
+    // --- DoH subpath: /my-realname-solver (hidden service, not in landing) ---
     if (path === DOH_PATH || path.startsWith(DOH_PATH + "/")) {
       return handleDoH(request, url, path);
+    }
+
+    // --- /ip: requesting client's real IP + light geo (no KV, no upstream) ---
+    if (path === "/ip" || path === "/ip/") {
+      const d = ipData(request);
+      const accept = request.headers.get("accept") || "";
+      const wantsHtml = accept.includes("text/html") && !accept.includes("application/json");
+      // debug: ?raw=1 dumps the raw cf-* headers (ops only, not advertised)
+      if (url.searchParams.get("raw") === "1" && !wantsHtml) {
+        return json({
+          cf_connecting_ip: request.headers.get("cf-connecting-ip"),
+          cf_ipv6: request.headers.get("cf-ipv6"),
+          cf_visitor_raw: request.headers.get("cf-visitor"),
+          cf_ip: request.headers.get("cf-ip"),
+          x_forwarded_for: request.headers.get("x-forwarded-for"),
+        });
+      }
+      if (wantsHtml) {
+        return new Response(ipHtml(d), {
+          headers: {
+            "content-type": "text/html; charset=utf-8",
+            "cache-control": "no-store",
+            "x-powered-by": "api-mint",
+            ...corsHeaders(),
+          },
+        });
+      }
+      return json(d);
     }
 
     // --- rate limit (KV) ---
@@ -241,7 +269,7 @@ export default {
             "GET /v1/fx?from=USD&to=CNY&amount=100",
             "GET /v1/crypto?symbol=BTC",
             "GET /v1/url/extract?url=https://example.com",
-            "GET /my-realname-solver?name=example.com&type=A  (DoH, dns-json)",
+            "GET /ip",
           ],
           pricing: "free forever — 30 req/min per IP, no key needed",
           uptime: env.UPTIME || "booting",
@@ -305,6 +333,64 @@ function json(body, status = 200) {
   });
 }
 
+// --- /ip: the requesting client's REAL IP + light geo ---------------------
+// cf-connecting-ip is the authoritative source for the real client IP in a
+// CF Worker (it is NOT an edge/CDN hop) and is protected from spoofing.
+//
+// Geo/ASN sourcing — trust only what CF itself sets:
+//   * country  -> cf-visitor.country, else the standalone cf-ipcountry header.
+//     CF always overwrites cf-ipcountry with the real value (verified: spoofed
+//     "ZZ" came back as "CN"), so it is safe to read even when the zone's
+//     "Cloudflare IP Location Headers" setting is OFF.
+//   * asn/org/city/region/timezone -> cf-visitor ONLY. CF only populates these
+//     inside cf-visitor when the zone's "Cloudflare IP Location Headers" is ON;
+//     when OFF it returns {"scheme":...} so these degrade to null. We do NOT
+//     read the standalone cf-asp / cf-aspd headers: when the setting is OFF CF
+//     does not overwrite them, so a client can spoof them (verified live).
+// No external geo lookup — keeps it fast and dependency-free.
+function ipData(request) {
+  const h = request.headers;
+  const ip = h.get("cf-connecting-ip") || "unknown";
+  const ipv6 = h.get("cf-ipv6") || null;
+  let v = {};
+  try { v = JSON.parse(h.get("cf-visitor") || "{}"); } catch { v = {}; }
+  return {
+    ip,
+    ipv6,
+    asn: v.asn || null,
+    org: v.asn_org || v.organization || null,
+    network_type: v.asn_type || null,
+    country: v.country || h.get("cf-ipcountry") || null,
+    region: v.region || null,
+    city: v.city || null,
+    timezone: v.timezone || null,
+  };
+}
+
+function ipHtml(d) {
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const rows = [
+    ["IP", d.ip], ["IPv6", d.ipv6 || "—"], ["ASN", d.asn || "—"], ["Network", d.org || "—"],
+    ["Type", d.network_type || "—"], ["City", d.city || "—"], ["Region", d.region || "—"],
+    ["Country", d.country || "—"], ["Timezone", d.timezone || "—"],
+  ];
+  const body = rows.map(([k, val]) => `<tr><td>${esc(k)}</td><td>${esc(val)}</td></tr>`).join("");
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${esc(d.ip)} — your IP</title>
+<meta name="robots" content="noindex">
+<style>:root{--bg:#0d0f12;--panel:#15181d;--line:#2a2f37;--text:#e8eaed;--dim:#9aa0a6;--amber:#ffb81c}*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font:15px/1.6 ui-monospace,'SF Mono',Menlo,Consolas,monospace;background-image:radial-gradient(circle,#1a1e24 1px,transparent 1px);background-size:24px 24px;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.card{background:var(--panel);border:1px solid var(--line);padding:32px;max-width:440px;width:100%;margin:16px}
+.lbl{color:var(--dim);font-size:12px;letter-spacing:.15em;text-transform:uppercase}
+.big{font-size:38px;color:var(--amber);margin:6px 0 18px;word-break:break-all}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td{padding:7px 0;border-top:1px solid var(--line)}
+td:first-child{color:var(--dim);width:96px}</style></head>
+<body><div class="card"><div class="lbl">Your IP address</div><div class="big">${esc(d.ip)}</div><table>${body}</table>
+<p style="margin-top:18px;color:var(--dim);font-size:12px">GET /ip · no API key · powered by api-mint</p></div></body></html>`;
+}
+
+
 function landingHtml(env) {
   const uptime = env.UPTIME || "online";
   return `<!DOCTYPE html>
@@ -357,7 +443,7 @@ a{color:var(--amber);text-decoration:none}
 <tr><td><code>GET /v1/fx</code></td><td>Live USD forex rates with conversion. Params: <code>from</code>, <code>to</code>, <code>amount</code></td></tr>
 <tr><td><code>GET /v1/crypto</code></td><td>Crypto prices (BTC, ETH, BNB, SOL) in USD with 24h change. Param: <code>symbol</code></td></tr>
 <tr><td><code>GET /v1/url/extract</code></td><td>Page title, description, og-image, final URL. Param: <code>url</code></td></tr>
-<tr><td><code>GET /my-realname-solver</code></td><td>DoH (DNS-over-HTTPS) relay — DNS over HTTPS via cloudflare-dns.com. Params: <code>name</code>, <code>type</code> (or Google-style <code>dn</code>). GET returns dns-json; POST with <code>application/dns-message</code> does binary wire; POST with a dns-json body also works.</td></tr>
+<tr><td><code>GET /ip</code></td><td>Your public IP — the real client IP (not the CDN edge), IPv6, country, ASN + city when available. JSON by default; HTML card in the browser.</td></tr>
 <tr><td><code>GET /health</code></td><td>Liveness probe — <code>{"ok":true}</code></td></tr>
 <tr><td><code>GET /</code></td><td>This page (HTML) or machine-readable service info (Accept: application/json)</td></tr>
 </table>
@@ -367,10 +453,7 @@ a{color:var(--amber);text-decoration:none}
 curl "https://api-mint.hoiwan.workers.dev/v1/fx?from=USD&to=CNY&amount=100"
 curl "https://api-mint.hoiwan.workers.dev/v1/crypto?symbol=BTC"
 curl "https://api-mint.hoiwan.workers.dev/v1/url/extract?url=https://example.com"
-curl "https://api-mint.hoiwan.workers.dev/my-realname-solver?name=example.com&type=A"   # DoH dns-json
-curl -X POST "https://api-mint.hoiwan.workers.dev/my-realname-solver" \
-     -H "accept: application/dns-message" -H "content-type: application/dns-message" \
-     --data-binary @query.bin                                                        # DoH binary wire</code></pre>
+curl "https://api-mint.hoiwan.workers.dev/ip"</code></pre>
 
 <h2>Limits</h2>
 <p style="color:var(--dim);font-size:14px">30 requests/minute per IP — no key, no signup, free forever.</p>
