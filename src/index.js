@@ -37,6 +37,23 @@ const CACHED_TTL_SEC = {
 //   POST body {name,type}      (dns-json; translated to an upstream GET,
 //                               because CF /dns-query rejects JSON POST bodies)
 //   POST body <wire>  + accept: application/dns-message  (binary, passed through)
+
+/* --- daily PV counter (shared KV AIPPS_PV) ---
+   One read-modify-write per request (accurate even at low traffic).
+   /health excluded so cron probes don't inflate. Free tier: 10k KV
+   writes/mo — fine at launch; switch to a Durable Object atomic counter
+   if volume grows past that. */
+const PV_PRODUCT = "api";
+function pvBump(env, ctx) {
+  const key = "pv:" + PV_PRODUCT + ":" + new Date().toISOString().slice(0, 10);
+  if (ctx && ctx.waitUntil) ctx.waitUntil((async () => {
+    try {
+      const cur = parseInt((await env.PV.get(key)) || "0", 10) || 0;
+      await env.PV.put(key, String(cur + 1));
+    } catch {}
+  })());
+}
+
 const DOH_PATH = "/my-realname-solver";
 const DOH_ORIGIN = "https://cloudflare-dns.com/dns-query";
 const DOH_JSON_CT = "application/dns-json";
@@ -197,6 +214,9 @@ export default {
         headers: corsHeaders(),
       });
     }
+
+    // --- daily PV count (KV AIPPS_PV; /health excluded so cron probes don't inflate) ---
+    if (path !== "/health") pvBump(env, ctx);
 
     // --- DoH subpath: /my-realname-solver (hidden service, not in landing) ---
     if (path === DOH_PATH || path.startsWith(DOH_PATH + "/")) {
