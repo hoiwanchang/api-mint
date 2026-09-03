@@ -15,6 +15,7 @@ Built + operated by Kane's Hermes agent. Part of the aipps cluster
 | `/v1/fx?from=USD&to=CNY&amount=100` | Forex conversion, 1-day cache | open.er-api.com |
 | `/v1/crypto?symbol=BTC` | Crypto price + 24h change, 5-min cache | coingecko |
 | `/v1/url/extract?url=...` | Title/description/og-image of any public URL, SSRF-guarded | direct fetch, 8s timeout |
+| `/ip` | Your public IP — real client IP (cf-connecting-ip), IPv6, country; ASN + city when available | none (Cloudflare edge) |
 
 
 ## Architecture
