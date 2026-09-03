@@ -8,7 +8,7 @@ daily ops all unattended).
 
 ## Endpoints
 
-Base URL: `https://api-mint.hoiwan.workers.dev`
+Base URL: `https://api.aipps.vip`
 
 | Endpoint | Description | Params |
 |---|---|---|
@@ -22,10 +22,10 @@ Base URL: `https://api-mint.hoiwan.workers.dev`
 ## Quick start
 
 ```bash
-curl "https://api-mint.hoiwan.workers.dev/v1/today?tz=Asia/Shanghai"
-curl "https://api-mint.hoiwan.workers.dev/v1/fx?from=USD&to=CNY&amount=100"
-curl "https://api-mint.hoiwan.workers.dev/v1/crypto?symbol=BTC"
-curl "https://api-mint.hoiwan.workers.dev/v1/url/extract?url=https://example.com"
+curl "https://api.aipps.vip/v1/today?tz=Asia/Shanghai"
+curl "https://api.aipps.vip/v1/fx?from=USD&to=CNY&amount=100"
+curl "https://api.aipps.vip/v1/crypto?symbol=BTC"
+curl "https://api.aipps.vip/v1/url/extract?url=https://example.com"
 ```
 
 ### Responses

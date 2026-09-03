@@ -2,7 +2,7 @@
   "project": "api-mint",
   "created": "2026-08-30T23:30:00+08:00",
   "status": "live_promoting",
-  "live_url": "https://api-mint.hoiwan.workers.dev",
+  "live_url": "https://api.aipps.vip",
   "custom_domain": {
     "status": "live",
     "bound": [

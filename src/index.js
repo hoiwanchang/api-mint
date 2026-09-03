@@ -289,14 +289,14 @@ export default {
         const r = await handleExtract(url, env);
         body = r.body; status = r.status;
       } else if (path === "/sitemap.xml") {
-        const base = "https://api-mint.hoiwan.workers.dev";
+        const base = "https://api.aipps.vip";
         return new Response(
           `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n<url><loc>${base}/</loc><changefreq>daily</changefreq></url>\n</urlset>`,
           { headers: { "content-type": "application/xml; charset=utf-8", "cache-control": "public, max-age=86400" } }
         );
       } else if (path === "/robots.txt") {
         return new Response(
-          `User-agent: *\nAllow: /\nDisallow: /v1/\nSitemap: https://api-mint.hoiwan.workers.dev/sitemap.xml\n`,
+          `User-agent: *\nAllow: /\nDisallow: /v1/\nSitemap: https://api.aipps.vip/sitemap.xml\n`,
           { headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "public, max-age=86400" } }
         );
       } else {
@@ -404,7 +404,7 @@ function landingHtml(env) {
 <meta property="og:title" content="api-mint — free utility APIs, no key needed">
 <meta property="og:description" content="Timezone, forex, crypto prices, page metadata. 30 req/min free, per IP, no API key.">
 <meta property="og:type" content="website">
-<link rel="canonical" href="https://api-mint.hoiwan.workers.dev/">
+<link rel="canonical" href="https://api.aipps.vip/">
 <style>
 :root{--bg:#0d0f12;--panel:#15181d;--line:#2a2f37;--text:#e8eaed;--dim:#9aa0a6;--amber:#ffb81c;--ok:#3dd68c}
 *{margin:0;padding:0;box-sizing:border-box}
@@ -449,11 +449,11 @@ a{color:var(--amber);text-decoration:none}
 </table>
 
 <h2>Quick start</h2>
-<pre><code>curl "https://api-mint.hoiwan.workers.dev/v1/today?tz=Asia/Shanghai"
-curl "https://api-mint.hoiwan.workers.dev/v1/fx?from=USD&to=CNY&amount=100"
-curl "https://api-mint.hoiwan.workers.dev/v1/crypto?symbol=BTC"
-curl "https://api-mint.hoiwan.workers.dev/v1/url/extract?url=https://example.com"
-curl "https://api-mint.hoiwan.workers.dev/ip"</code></pre>
+<pre><code>curl "https://api.aipps.vip/v1/today?tz=Asia/Shanghai"
+curl "https://api.aipps.vip/v1/fx?from=USD&to=CNY&amount=100"
+curl "https://api.aipps.vip/v1/crypto?symbol=BTC"
+curl "https://api.aipps.vip/v1/url/extract?url=https://example.com"
+curl "https://api.aipps.vip/ip"</code></pre>
 
 <h2>Limits</h2>
 <p style="color:var(--dim);font-size:14px">30 requests/minute per IP — no key, no signup, free forever.</p>
