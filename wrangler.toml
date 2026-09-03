@@ -2,6 +2,11 @@ name = "api-mint"
 main = "src/index.js"
 compatibility_date = "2025-08-01"
 
+# 自定义子域名 route：api.aipps.vip/*（aipps.vip zone 已托管在 CF）
+routes = [
+  { pattern = "api.aipps.vip/*", zone_name = "aipps.vip" }
+]
+
 [vars]
 UPTIME = "2026-08-30"
 
@@ -10,14 +15,10 @@ UPTIME = "2026-08-30"
 binding = "RATE"
 id = "3f27155886dc4672ba2baf42657529ff"
 
+# daily PV counter (one key per request, 35d TTL; /health excluded)
 [[kv_namespaces]]
 binding = "PV"
 id = "e864d373abcd452eb9e865720cb56c8c"
-
-# 自定义子域名 route：api.aipps.vip/*（aipps.vip zone 已托管在 CF）
-routes = [
-  { pattern = "api.aipps.vip/*", zone_name = "aipps.vip" }
-]
 
 # Cron: daily self-check at 09:00 UTC (17:00 CST).
 [triggers]
