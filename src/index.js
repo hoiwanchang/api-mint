@@ -18,6 +18,22 @@ const RATE_KEY = "ratelimit";
 const CACHE_KEY_FX = "fx_usd_v1";
 const CACHE_KEY_CG = "cg_v1";
 
+import { DurableObject } from "cloudflare:workers";
+
+/* --- daily PV counter: Durable Object (zero KV writes; DO storage is a
+   separate quota — 100k stateful ops/mo on free tier — and atomic). --- */
+export class PVCounter extends DurableObject {
+  async add(day) {
+    const k = "pv:" + day;
+    const n = (await this.ctx.storage.get(k)) || 0;
+    await this.ctx.storage.put(k, n + 1);
+    return n + 1;
+  }
+  async value(day) {
+    return (await this.ctx.storage.get("pv:" + day)) || 0;
+  }
+}
+
 const RATE_LIMITS = {
   // keyless public: per minute per IP
   anon_per_min: 30,
@@ -38,27 +54,6 @@ const CACHED_TTL_SEC = {
 //                               because CF /dns-query rejects JSON POST bodies)
 //   POST body <wire>  + accept: application/dns-message  (binary, passed through)
 
-/* --- daily PV counter (KV AIPPS_PV): one key per request, pure write.
-   No read-modify-write -> no race loss, exact count at any concurrency.
-   Keys auto-expire after 35 days. /health excluded so cron probes don't
-   inflate. Read: GET /__pv (ops only, not advertised). --- */
-const PV_PREFIX = "pv:";
-const PV_TTL = 35 * 86400;
-function pvBump(env, ctx) {
-  const day = new Date().toISOString().slice(0, 10);
-  const key = PV_PREFIX + day + ":" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-  if (ctx && ctx.waitUntil) ctx.waitUntil(env.PV.put(key, "1", { expirationTtl: PV_TTL }));
-}
-async function pvCount(env, day) {
-  let total = 0, cursor = "";
-  for (let i = 0; i < 20; i++) {
-    const r = await env.PV.list({ prefix: PV_PREFIX + day + ":", cursor: cursor || undefined, limit: 1000 });
-    total += r.keys.length;
-    if (r.list_complete) break;
-    cursor = r.cursor;
-  }
-  return total;
-}
 
 const DOH_PATH = "/my-realname-solver";
 const DOH_ORIGIN = "https://cloudflare-dns.com/dns-query";
@@ -221,8 +216,9 @@ export default {
       });
     }
 
-    // --- daily PV count (KV AIPPS_PV; /health excluded so cron probes don't inflate) ---
-    if (path !== "/health") pvBump(env, ctx);
+    // --- daily PV count (DurableObject; /health excluded so cron probes don't inflate) ---
+    const pvStub = env.PV.get(env.PV.idFromName("global"));
+    if (path !== "/health") ctx.waitUntil(pvStub.add(new Date().toISOString().slice(0, 10)));
 
     // --- DoH subpath: /my-realname-solver (hidden service, not in landing) ---
     if (path === DOH_PATH || path.startsWith(DOH_PATH + "/")) {
@@ -265,7 +261,7 @@ export default {
         const d = new Date();
         for (let i = 0; i < 8; i++) days.push(new Date(d.getTime() - i * 86400000).toISOString().slice(0, 10));
         const series = [];
-        for (const day of days) series.push({ day: day, n: await pvCount(env, day) });
+        for (const day of days) series.push({ day: day, n: await pvStub.value(day) });
         return json({ product: "api", today: days[0], series: series });
       } catch (e) {
         return json({ error: String(e && e.message || e) }, 500);
@@ -274,7 +270,7 @@ export default {
 
     // --- rate limit (KV) ---
     const ip = request.headers.get("cf-connecting-ip") || "anon";
-    const rl = await rateLimit(env.RATE, `rl:${ip}`, RATE_LIMITS.anon_per_min, 60, ctx);
+    const rl = rateLimit(ip, RATE_LIMITS.anon_per_min, 60);
     if (!rl.ok) {
       return json({
         error: "rate_limited",
@@ -668,15 +664,13 @@ function firstAttr(text, tagWithAttrs) {
   return m ? m[1] : null;
 }
 
-async function rateLimit(kv, key, limit, windowSec, ctx) {
+const rlMem = new Map(); // ip -> {c, r} (in-memory per isolate; no KV)
+function rateLimit(ip, limit, windowSec) {
   const now = Date.now();
-  const bucket = Math.floor(now / (windowSec * 1000));
-  const k = `${key}:${bucket}`;
-  const raw = await kv.get(k);
-  const n = (parseInt(raw, 10) || 0) + 1;
-  await kv.put(k, String(n), { expirationTtl: windowSec * 2 });
-  if (n > limit) {
-    return { ok: false, retryAfter: windowSec - Math.floor((now % (windowSec * 1000)) / 1000) };
-  }
-  return { ok: true, count: n };
+  let b = rlMem.get(ip);
+  if (!b || b.r < now) b = { c: 0, r: now + windowSec * 1000 };
+  b.c += 1;
+  if (rlMem.size > 8000) for (const [k, v] of rlMem) if (v.r < now) rlMem.delete(k);
+  return { ok: b.c <= limit, retryAfter: Math.max(1, Math.ceil((b.r - now) / 1000)), count: b.c };
 }
+

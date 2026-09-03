@@ -10,15 +10,15 @@ routes = [
 [vars]
 UPTIME = "2026-08-30"
 
-# --- bindings (declared; values supplied via .dev.vars / dashboard) ---
-[[kv_namespaces]]
-binding = "RATE"
-id = "3f27155886dc4672ba2baf42657529ff"
+# 限流已改内存计数；PV 计数已迁 Durable Object → 本 worker 零 KV。
 
-# daily PV counter (one key per request, 35d TTL; /health excluded)
-[[kv_namespaces]]
-binding = "PV"
-id = "e864d373abcd452eb9e865720cb56c8c"
+# --- PV counter: Durable Object (zero KV; separate 100k-ops/mo quota) ---
+[durable_objects]
+bindings = [{ name = "PV", class_name = "PVCounter" }]
+
+[exports.PVCounter]
+type = "durable-object"
+storage = "sqlite"
 
 # Cron: daily self-check at 09:00 UTC (17:00 CST).
 [triggers]
