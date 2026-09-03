@@ -19,14 +19,41 @@
       "CORS 全开（access-control-allow-origin: *），浏览器前端可直接调用，线上验证通过",
       "GitHub 公开仓库 hoiwanchang/api-mint 推送（双语 README + 源码 + self-host 指南）",
       "public-apis/public-apis PR #7151 提交（50k+ star 免费 API 目录，Currency Exchange 分类，mergeable=true 待审）"
+    ],
+    "2026-08-31": [
+      "每日巡检 09:00 CST：api.aipps.vip /health 200 (1.40s)、/ 200；qr.aipps.vip /health 200 (0.87s)、/svg?data=test 200 image/svg+xml、/ 200；short-mint.hoiwan.workers.dev /health 200 (2.38s)、/api/stats/demo 200 JSON (demo clicks=3)、/ 200。全部正常，无 Bark 告警",
+      "short.aipps.vip route 探测：000 (未绑，proxy exit 35) — 仍待 Kane 在 CF dashboard 添加，主域名未切换",
+      "PR #7151 仍 open（未 merged、未 closed），继续观察"
+    ],
+    "2026-09-01": [
+      "每日巡检 09:00 CST：api.aipps.vip /health 200；qr.aipps.vip /health 200 + /svg?data=test 200 image/svg+xml；short.aipps.vip /health 200（主域名已生效，直连）+ /api/stats/demo 200 JSON (demo clicks=13)；www.aipps.vip /health 200 checkout:enabled（proxy+UA）。四服务全绿，无 Bark",
+      "short.aipps.vip route 已由 Kane 绑定：直连 /health 200（前日 000 未绑）",
+      "PR #7151 仍 open：无评论、无 review、无 label 变化（匿名 API 确认）",
+      "Creem 对账：live key 有效（200），0 交易（账户审核中，符合预期）；ledger.json 已建",
+      "GitHub 凭证核对：.git-credentials 存的是 gho_ 前缀 OAuth access token（浏览器登录用），此类令牌不能用于 REST API 认证（/user 401 Bad credentials 属预期）；今日 PR 检查实为匿名读成功（200，0 评论 0 review）。写操作（开 PR/回复）需 Kane 提供 ghp_/github_pat_ 格式 PAT"
+    ],
+    "2026-09-02": [
+      "每日巡检 09:00 CST：api.aipps.vip /health 200 (1.59s)；qr/short/www 见 cluster ops/state.json。全部正常，无 Bark",
+      "PR #7151 仍 open（state=open, merged=false, updated 2026-08-30T16:30Z，无新变化），继续盯"
+    ]
+    ,
+    "2026-09-03": [
+      "每日巡检 09:00 CST：api.aipps.vip /health 200，全部正常，无 Bark",
+      "PR #7151 已合入（public-apis/public-apis，merged_at 2026-09-02T02:13:35Z，title 'Add api-mint API'）。推广里程碑完成：SEO 落地页 + GitHub 仓库 + public-apis 目录三件套齐活。pr_watch 标记 merged，停止每日盯",
+      "后续：public-apis 收录后持续监控 api.aipps.vip 流量增长（可参考 sitemap/落地页请求量），Creem 审核通过后关注首页引流转化"
     ]
   },
   "pr_watch": [
     {
       "repo": "public-apis/public-apis",
       "pr": 7151,
-      "status": "open",
-      "note": "被 merge 后记入本文件并告知用户"
+      "status": "merged",
+      "merged": true,
+      "merged_at": "2026-09-02T02:13:35Z",
+      "title": "Add api-mint API",
+      "html_url": "https://github.com/public-apis/public-apis/pull/7151",
+      "note": "2026-09-03 巡检确认合入（昨日巡检时仍 open）。推广目标达成，停止每日盯",
+      "last_check": "2026-09-03T09:00:40+08:00"
     }
   ],
   "local_verified": {
@@ -56,5 +83,10 @@
     "registered": true,
     "credentials_pending": true,
     "need": "merchant ID + API token (Dashboard -> Developers -> API keys) for daily sales reconciliation"
+  },
+  "short_route": {
+    "bound": true,
+    "verified": "2026-09-01T09:10:00+08:00",
+    "note": "short.aipps.vip 直连 200"
   }
 }

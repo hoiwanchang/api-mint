@@ -28,6 +28,163 @@ const CACHED_TTL_SEC = {
   cg: 60 * 5,       // 5 min
 };
 
+// --- DoH (DNS-over-HTTPS) subpath: /my-realname-solver -------------------
+// Forwards to https://cloudflare-dns.com/dns-query — same shape as an EdgeOne
+// origin-rewrite rule (host rewrite + path replace + accept/ct normalisation)
+// but implemented as one fetch() in the Worker. All four DoH forms work:
+//   GET  ?name=x&type=A        (dns-json)
+//   GET  ?dn=x                 (dns-json; Google-DoH-style dn mapped to name)
+//   POST body {name,type}      (dns-json; translated to an upstream GET,
+//                               because CF /dns-query rejects JSON POST bodies)
+//   POST body <wire>  + accept: application/dns-message  (binary, passed through)
+const DOH_PATH = "/my-realname-solver";
+const DOH_ORIGIN = "https://cloudflare-dns.com/dns-query";
+const DOH_JSON_CT = "application/dns-json";
+const DOH_BIN_CT = "application/dns-message";
+const DOH_CACHE_TTL = 10; // short: DNS can go stale fast
+const DOH_RL_WINDOW = 60;
+const DOH_RL_LIMIT = 120; // soft, per-IP, in-memory (bypasses the KV API limit)
+
+const dohRl = new Map(); // ip -> {count, resetAt}
+function dohRateLimit(ip) {
+  const now = Date.now();
+  let b = dohRl.get(ip);
+  if (!b || b.resetAt < now) {
+    b = { count: 0, resetAt: now + DOH_RL_WINDOW * 1000 };
+    dohRl.set(ip, b);
+  }
+  b.count += 1;
+  if (dohRl.size > 8000) for (const [k, v] of dohRl) if (v.resetAt < now) dohRl.delete(k);
+  return b.count <= DOH_RL_LIMIT;
+}
+
+async function handleDoH(request, url, path) {
+  const accept = (request.headers.get("accept") || "").toLowerCase();
+  const binary = accept.includes(DOH_BIN_CT);
+
+  // CORS preflight for this subpath (binary DoH needs POST)
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "access-control-allow-origin": "*",
+        "access-control-allow-methods": "GET, POST, OPTIONS",
+        "access-control-allow-headers": "accept, content-type",
+        "access-control-max-age": "86400",
+      },
+    });
+  }
+  if (request.method !== "GET" && request.method !== "POST") {
+    return new Response(null, {
+      status: 405,
+      headers: { allow: "GET, POST", "access-control-allow-origin": "*" },
+    });
+  }
+  // binary DNS wire format must be POST
+  if (binary && request.method !== "POST") {
+    return json({ error: "method_not_allowed", message: "application/dns-message requires POST" }, 405);
+  }
+
+  // health probe under the DoH path
+  if (path === DOH_PATH + "/health" || path === DOH_PATH + "/health/") {
+    return json({ ok: true, service: "do-h", origin: "cloudflare-dns.com", usage: "GET " + DOH_PATH + "?name=example.com&type=A" });
+  }
+
+  // soft per-IP guard (json mode only; binary is usually our own tooling)
+  if (!binary) {
+    const ip = request.headers.get("cf-connecting-ip") || "anon";
+    if (!dohRateLimit(ip)) {
+      return json({ error: "rate_limited", message: "Too many DoH requests, slow down." }, 429);
+    }
+  }
+
+  // Forward to upstream. CF's /dns-query speaks:
+  //   GET  ?name&type&cd&do&bootstrap  -> dns-json
+  //   POST (wire, content/accept: application/dns-message) -> dns-message
+  // It does NOT accept a JSON body (POST + JSON -> 400/415). So a JSON-body
+  // POST from a client is translated to an upstream GET with the same params.
+  let fwdMethod;
+  let fwdBody;
+  let fwdHeaders;
+  const qs = new URLSearchParams(url.searchParams);
+  if (qs.has("dn") && !qs.has("name")) { // Google DoH clients send ?dn=
+    qs.set("name", qs.get("dn"));
+    qs.delete("dn");
+  }
+
+  if (binary) {
+    fwdMethod = "POST";
+    fwdBody = request.body;
+    fwdHeaders = new Headers();
+    fwdHeaders.set("accept", DOH_BIN_CT);
+    fwdHeaders.set("content-type", DOH_BIN_CT);
+  } else {
+    // --- json mode ---
+    fwdHeaders = new Headers();
+    fwdHeaders.set("accept", DOH_JSON_CT);
+    if (request.method === "POST") {
+      // translate JSON body -> query params (CF upstream needs GET for json)
+      let parsed = {};
+      const ct = (request.headers.get("content-type") || "").toLowerCase();
+      if (!ct.includes("application/dns-json") && !ct.includes("application/json")) {
+        return json({ error: "unsupported_media_type", message: "json mode needs content-type application/dns-json" }, 415);
+      }
+      try {
+        parsed = JSON.parse(await request.text());
+      } catch {
+        return json({ error: "invalid_json", message: "POST body must be valid dns-json" }, 400);
+      }
+      if (parsed.name && !qs.has("name")) qs.set("name", String(parsed.name));
+      if (parsed.type != null && !qs.has("type")) qs.set("type", String(parsed.type));
+      for (const k of ["cd", "do", "bootstrap"]) {
+        if (parsed[k] == null) continue;
+        const v = String(parsed[k]).toLowerCase();
+        if (["true", "false"].includes(v)) qs.set(k, v);
+      }
+    }
+    if (!qs.has("name") && !qs.has("dn")) {
+      return json({ error: "missing_name", message: "Provide ?name=<domain> (or a JSON body with name)" }, 400);
+    }
+    fwdMethod = "GET";
+    fwdBody = undefined;
+  }
+  const fwdSearch = "?" + qs.toString();
+
+  let upstream;
+  const cacheKey = !binary && fwdMethod === "GET" ? request.url : null;
+  const cache = cacheKey ? caches.default : null;
+  if (cache) {
+    const hit = await cache.match(cacheKey);
+    if (hit) return hit;
+  }
+
+  try {
+    upstream = await fetch(DOH_ORIGIN + fwdSearch, {
+      method: fwdMethod,
+      headers: fwdHeaders,
+      body: fwdBody,
+      redirect: "follow",
+    });
+  } catch (e) {
+    return json({ error: "upstream_failed", message: String((e && e.message) || e) }, 502);
+  }
+
+  const ct = binary ? DOH_BIN_CT : DOH_JSON_CT;
+  const cc = binary ? "no-store" : `public, max-age=${DOH_CACHE_TTL}`;
+  const out = new Response(upstream.body, {
+    status: upstream.status,
+    headers: {
+      "content-type": ct,
+      "cache-control": cc,
+      "access-control-allow-origin": "*",
+    },
+  });
+  if (cache && cacheKey && out.status === 200) {
+    cache.put(cacheKey, out.clone(), { cacheTtl: DOH_CACHE_TTL }).catch(() => {});
+  }
+  return out;
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -39,6 +196,11 @@ export default {
         status: 204,
         headers: corsHeaders(),
       });
+    }
+
+    // --- DoH subpath: /my-realname-solver (own rate limit, skips KV API limit) ---
+    if (path === DOH_PATH || path.startsWith(DOH_PATH + "/")) {
+      return handleDoH(request, url, path);
     }
 
     // --- rate limit (KV) ---
@@ -79,6 +241,7 @@ export default {
             "GET /v1/fx?from=USD&to=CNY&amount=100",
             "GET /v1/crypto?symbol=BTC",
             "GET /v1/url/extract?url=https://example.com",
+            "GET /my-realname-solver?name=example.com&type=A  (DoH, dns-json)",
           ],
           pricing: "free forever — 30 req/min per IP, no key needed",
           uptime: env.UPTIME || "booting",
@@ -194,6 +357,7 @@ a{color:var(--amber);text-decoration:none}
 <tr><td><code>GET /v1/fx</code></td><td>Live USD forex rates with conversion. Params: <code>from</code>, <code>to</code>, <code>amount</code></td></tr>
 <tr><td><code>GET /v1/crypto</code></td><td>Crypto prices (BTC, ETH, BNB, SOL) in USD with 24h change. Param: <code>symbol</code></td></tr>
 <tr><td><code>GET /v1/url/extract</code></td><td>Page title, description, og-image, final URL. Param: <code>url</code></td></tr>
+<tr><td><code>GET /my-realname-solver</code></td><td>DoH (DNS-over-HTTPS) relay — DNS over HTTPS via cloudflare-dns.com. Params: <code>name</code>, <code>type</code> (or Google-style <code>dn</code>). GET returns dns-json; POST with <code>application/dns-message</code> does binary wire; POST with a dns-json body also works.</td></tr>
 <tr><td><code>GET /health</code></td><td>Liveness probe — <code>{"ok":true}</code></td></tr>
 <tr><td><code>GET /</code></td><td>This page (HTML) or machine-readable service info (Accept: application/json)</td></tr>
 </table>
@@ -202,7 +366,11 @@ a{color:var(--amber);text-decoration:none}
 <pre><code>curl "https://api-mint.hoiwan.workers.dev/v1/today?tz=Asia/Shanghai"
 curl "https://api-mint.hoiwan.workers.dev/v1/fx?from=USD&to=CNY&amount=100"
 curl "https://api-mint.hoiwan.workers.dev/v1/crypto?symbol=BTC"
-curl "https://api-mint.hoiwan.workers.dev/v1/url/extract?url=https://example.com"</code></pre>
+curl "https://api-mint.hoiwan.workers.dev/v1/url/extract?url=https://example.com"
+curl "https://api-mint.hoiwan.workers.dev/my-realname-solver?name=example.com&type=A"   # DoH dns-json
+curl -X POST "https://api-mint.hoiwan.workers.dev/my-realname-solver" \
+     -H "accept: application/dns-message" -H "content-type: application/dns-message" \
+     --data-binary @query.bin                                                        # DoH binary wire</code></pre>
 
 <h2>Limits</h2>
 <p style="color:var(--dim);font-size:14px">30 requests/minute per IP — no key, no signup, free forever.</p>
